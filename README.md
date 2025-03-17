@@ -70,39 +70,46 @@
 - `MockMvc`
     - reference: [reference doc](https://terasolunaorg.github.io/guideline/5.4.1.RELEASE/en/UnitTest/ImplementsOfUnitTest/UsageOfLibraryForTest.html#mockmvc)
 
-      ![MockMvc](./readme-src/mockmvc.png)
+      1. test method에서 HTTP 기반 요청 보냄
+      2. **MockMvc가 TestDispatcherServlet에 가상의 요청 전송 → mock request**
+      - Dispatcher servlet은 request를 받아서 맞는 controller를 찾는 역할
+      3. TestDispatcherServelet이 Controller에 매칭되는 메소드를 불러서 요청 처리
+      4. test method는 mockMvc로부터 결과를 받고 verify를 함
+          ![MockMvc](./readme-src/mockmvc.png)
 
-    - `@SpringBootTest` + `@AutoConfigureMockMvc` → `webAppContextSettup`기반
-
-    ```java
-    import org.junit.jupiter.api.DisplayName;
-    import org.junit.jupiter.api.Test;
-    import org.springframework.beans.factory.annotation.Autowired;
-    import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-    import org.springframework.boot.test.context.SpringBootTest;
-    import org.springframework.http.MediaType;
-    import org.springframework.test.web.servlet.MockMvc;
-    import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-    import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-    import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-    import static org.hamcrest.core.IsEqual.equalTo;
+  - `@SpringBootTest` + `@AutoConfigureMockMvc` → `webAppContextSettup`기반
+  - MockMvc 옵션
+    1. `webAppContextSetup`: **Spring의 전체 애플리케이션 컨텍스트(ApplicationContext)를 로드**하여 테스트하는 방식
+    2. `standaloneSetup`: **테스트 대상이 되는 Controller만 로드**하여 실행 (mock객체를 직접 주입해야함)
+      ```java
+      import org.junit.jupiter.api.DisplayName;
+      import org.junit.jupiter.api.Test;
+      import org.springframework.beans.factory.annotation.Autowired;
+      import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+      import org.springframework.boot.test.context.SpringBootTest;
+      import org.springframework.http.MediaType;
+      import org.springframework.test.web.servlet.MockMvc;
+      import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+      import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+      import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+      import static org.hamcrest.core.IsEqual.equalTo;
     
-    @SpringBootTest
-    @AutoConfigureMockMvc
-    public class HelloControllerTest {
-        @Autowired
-        private MockMvc mvc;
+      @SpringBootTest
+      @AutoConfigureMockMvc
+      public class HelloControllerTest {
+          @Autowired
+          private MockMvc mvc;
     
-        @DisplayName("DisplayName: 테스트 이름 설정")
-        @Test
-        public void getHello() throws Exception {
-            mvc.perform(MockMvcRequestBuilders.get("/").accept(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk())
-                    .andExpect(content().string(equalTo("Greetings from Spring Boot!")));
-        }
-    }
+          @DisplayName("DisplayName: 테스트 이름 설정")
+          @Test
+          public void getHello() throws Exception {
+              mvc.perform(MockMvcRequestBuilders.get("/").accept(MediaType.APPLICATION_JSON))
+                      .andExpect(status().isOk())
+                      .andExpect(content().string(equalTo("Greetings from Spring Boot!")));
+          }
+      }
     
-    ```
+      ```
 
 
 ## 2. Spring이 지원하는 기술(IoC/DI, AOP, PSA) 조사
@@ -120,6 +127,7 @@
 - 객체가 생성자 인수, 팩토리 메서드에서 생성되거나 반환된 후에, 객체 인스턴스에 설정된 속성을 통해서만 종속성을 정의하는 프로세스 → **의존성을 외부에서 주입받음**
 - 의존성 주입 방식
     1. 생성자 주입 (Constructor Injection) 🤩 → 객체 불변성(immutability) 보장
+       - `@RequiredArgsConstructor` 등을 하면 Lombok이 생성자를 자동으로 생성해줌
     2. Setter 주입 (Setter Injection) → 런타임에 의존성 주입
     3. 필드 주입 (Field Injection) → 런타임에 의존성 주입
 
@@ -157,12 +165,12 @@
 ### Bean Life Cycle
 
 - Spring이 객체(Bean)의 생성과 소멸 및 생명주기를 관리
-1. 스프링 IoC 컨테이너 생성
-2. 스프링 빈 생성
-3. 의존관계 주입
-4. 초기화 콜백 메소드 호출
+1. 스프링 IoC 컨테이너 생성 → `ApplicationContext` 로드
+2. 스프링 빈 생성 → `@Component`, `@Bean`
+3. 의존관계 주입 → `@Autowired`
+4. 초기화 콜백 메소드 호출 → `@PostConstruct` (빈 생성 후 바로 실행됨)
 5. 사용
-6. 소멸 전 콜백 메소드 호출
+6. 소멸 전 콜백 메소드 호출 → `@PreDestroy` (컨테이너 종료 직전 실행됨)
 7. 스프링 종료
 
 ## 4. Spring Annotation 분석
@@ -190,3 +198,93 @@
 
 - 모듈이 서로 통합되어 상호작용할 때 방생할 수 있는 문제를 찾아내고 해결하는 데 중점을 둔 테스트
 - 도구: Spring Boot Test, TestContainers
+
+---
+### Component Scan의 플로우
+1. `@SpringBootApplication` → `ComponentScan` 어노테이션
+  - `@Component`, `@Service`, `@Repository`, `@Controller`가 붙은 객체 등록
+  - ![springboot](./readme-src/springboot.png)
+2. `@Service` & `@Controller`
+  - `@Service` → `@Component`
+  - `@RestController` → `@Controller` → `@Component`
+  - ![Service & Controller](./readme-src/servicencontroller.png)
+3. `@Repository`로 등록하지 않았지만 Repository가 Jpa Repository를 상속받는다면 Component로 등록됨
+  - SpringBoot에서 `@EnableJpaRepositories`가 설정되어 있음 → `@Import(JpaRepositoriesRegistrar.class)`에서 JpaRepositoriesRegistrar가 JpaRepository를 상속받는 모든 interface를 빈으로 등록
+  - ![repository](./readme-src/repository.png)
+
+### Custom Annotation과 AOP를 적용한 로깅
+- 사용자 정의 Annotation
+
+    ```jsx
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    public @interface SampleAnnotation {}
+    ```
+
+  1. `@interface` 선언
+  2. `@Retention` (어노테이션을 어느 기간이 유지할건지), `@Target` (어떤 것에 적용할건지) 설정
+    - 옵션 reference: [options](https://velog.io/@juhyeon1114/%EC%BB%A4%EC%8A%A4%ED%85%80-Annotation-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+  3. `@Aspect` 어노테이션이 붙은 AOP 클래스 생성해서 어노테이션 동작 로직 작성
+  4. 커스텀 어노테이션을 적용하고 싶은 곳에 어노테이션을 붙이고 사용
+
+- AOP Dependencies
+
+    ```jsx
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    ```
+
+- reference: [reference doc](https://velog.io/@jjeongdong/Spring-AOP%EB%A5%BC-%ED%99%9C%EC%9A%A9%ED%95%9C-Logging-%EA%B5%AC%ED%98%84)
+- 구현 - `@LogRecord` 인터페이스 정의
+
+    ```jsx
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface LogRecord {
+    }
+    ```
+
+- 구현 - 어노테이션 동작 로직 정의
+
+    ```jsx
+    @Aspect
+    @Component
+    @Slf4j
+    public class LogAspect {
+    
+        @Around("@annotation(com.ceos21.springboot.annotation.logRecord.LogRecord)")
+        public Object logRecord(ProceedingJoinPoint joinPoint) throws Throwable {
+            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+            Method method = signature.getMethod();
+            log.info("[START] ======= method name = {} =======", method.getName());
+    
+            long startTime = System.currentTimeMillis();
+            Object result = joinPoint.proceed();
+            long executionTime = System.currentTimeMillis() - startTime;
+    
+            log.info("[END] ======= method executionTime = {} =======", executionTime);
+    
+            return result;
+        }
+    }
+    
+    ```
+
+- 구현 - 원하는 곳에 어노테이션 적용
+
+    ```jsx
+    @Service
+    @RequiredArgsConstructor
+    @Slf4j
+    public class TestService {
+        private final TestRepository testRepository;
+    
+        /* Read All */
+        @Transactional(readOnly = true)
+        @LogRecord
+        public List<Test> findAllTests() {
+            return testRepository.findAll();
+        }
+    }
+    ```
+- 실행 결과
+  - ![result](./readme-src/logging.png)
